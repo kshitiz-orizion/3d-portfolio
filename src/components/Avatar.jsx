@@ -53,6 +53,11 @@ export function Avatar(props) {
   // Keep track of the currently active animation
   const currentAction = useRef(null);
 
+  // --- Falling Y-axis movement config ---
+  const FALL_START_Y = 2;   // height the avatar starts falling from
+  const FALL_END_Y = 0;     // ground/rest position
+  const isFallingRef = useRef(false);
+
   useEffect(() => {
     // Initialize all actions to be ready but not actively playing
     Object.values(actions).forEach(action => {
@@ -66,11 +71,18 @@ export function Avatar(props) {
     actions["Waving"].setLoop(THREE.LoopOnce, 0);
     actions["Typing2"].setLoop(THREE.LoopOnce, 0);
     actions["Standing"].setLoop(THREE.LoopOnce, 0);
+    actions["Falling"].setLoop(THREE.LoopOnce, 0);
     // console.log(actions["Hello"])
 
     // Start with a default animation, e.g., "Standing"
-    const initialAction = actions["Standing"];
+    const initialAction = actions["Falling"];
     if (initialAction) {
+      initialAction.timeScale = 2;
+      // Position the avatar at the fall start height before playing
+      if (groupRef.current) {
+        groupRef.current.position.y = FALL_START_Y;
+      }
+      isFallingRef.current = true;
       initialAction.reset().fadeIn(0.5).setEffectiveWeight(1).play();
       currentAction.current = initialAction;
     }
@@ -83,11 +95,17 @@ export function Avatar(props) {
         currentAction.current === actions[finishedName];
 
       if (!stillRelevant) return;
-
+      if (finishedName === "Falling") {
+        isFallingRef.current = false;
+        if (groupRef.current) {
+          groupRef.current.position.y = FALL_END_Y;
+        }
+        transitionToAnimation("Standing", 0.5);
+      }
       if (finishedName === "Standing") {
         transitionToAnimation("Waving", 0.5);
       } else if (finishedName === "Waving") {
-        transitionToAnimation("Standing", 0.5);
+        transitionToAnimation("Falling", 0.5);
       }
     };
 
@@ -109,6 +127,19 @@ export function Avatar(props) {
       currentAction.current.crossFadeTo(newAction, duration, true); // true for warpBoolean
       currentAction.current.fadeOut(0.5); // Ensure it explicitly fades out
 
+      // Handle Falling-specific position setup/teardown
+      if (name === "Falling") {
+        isFallingRef.current = true;
+        if (groupRef.current) {
+          groupRef.current.position.y = FALL_START_Y;
+        }
+      } else if (currentAction.current === actions["Falling"]) {
+        isFallingRef.current = false;
+        if (groupRef.current) {
+          groupRef.current.position.y = FALL_END_Y;
+        }
+      }
+
       newAction.reset().fadeIn(0.5).setEffectiveWeight(1).play();
       currentAction.current = newAction;
       newAnimation.current = name;
@@ -124,9 +155,23 @@ export function Avatar(props) {
     }
   }, [props.animationState]);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (rotateRef.current && group2ref.current.rotation.z <= 2) {
       group2ref.current.rotation.z += 0.01;
+    }
+
+    // Drive the Y-axis drop while the Falling animation is active
+    const fallingAction = actions["Falling"];
+    if (
+      isFallingRef.current &&
+      fallingAction &&
+      currentAction.current === fallingAction &&
+      groupRef.current
+    ) {
+      const clipDuration = fallingAction.getClip().duration;
+      // action.time respects timeScale, so this tracks actual playback progress
+      const progress = THREE.MathUtils.clamp(fallingAction.time / clipDuration, 0, 1);
+      groupRef.current.position.y = THREE.MathUtils.lerp(FALL_START_Y, FALL_END_Y, progress);
     }
     // groupRef.current.getObjectByName("Head").lookAt(state.camera.position)
     // console.log(group2ref.current.rotation.z);

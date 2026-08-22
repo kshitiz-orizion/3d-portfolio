@@ -36,7 +36,7 @@ function RotatingShell() {
 }
 
 export const Experience = () => {
-  const animation = "Standing";
+  const animation = "Falling";
 
   return (
     <>
