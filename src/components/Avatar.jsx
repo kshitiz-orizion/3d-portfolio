@@ -21,19 +21,19 @@ export function Avatar(props) {
   const { animations: fallingAnimation } = useFBX('/animations/Falling.fbx');
   const { animations: standingAnimation } = useFBX('/animations/Standing.fbx');
   const { animations: helloAnimation } = useFBX('/animations/Asking Question.fbx');
-  const {animations: sitToType} = useFBX('/animations/Sit To Type.fbx');
-  const {animations:wavingAnimation} = useFBX('/animations/Waving.fbx');
-  const {animations: typing2Animation} = useFBX('/animations/Typing2.fbx');
-  const {animations: typingXAnimation} = useFBX('/animations/TypingX.fbx');
+  const { animations: sitToType } = useFBX('/animations/Sit To Type.fbx');
+  const { animations: wavingAnimation } = useFBX('/animations/Waving.fbx');
+  const { animations: typing2Animation } = useFBX('/animations/Typing2.fbx');
+  const { animations: typingXAnimation } = useFBX('/animations/TypingX.fbx');
 
   typingAnimation[0].name = "Typing";
   fallingAnimation[0].name = "Falling";
   standingAnimation[0].name = "Standing";
   helloAnimation[0].name = "Hello";
-  sitToType[0].name="Sitting";
-  wavingAnimation[0].name ="Waving";
-  typing2Animation[0].name="Typing2";
-  typingXAnimation[0].name="TypingX";
+  sitToType[0].name = "Sitting";
+  wavingAnimation[0].name = "Waving";
+  typing2Animation[0].name = "Typing2";
+  typingXAnimation[0].name = "TypingX";
   // Combine all animations into a single array for useAnimations
   const allAnimations = [
     typingAnimation[0],
@@ -63,9 +63,9 @@ export function Avatar(props) {
     });
 
     actions["Hello"].setLoop(THREE.LoopOnce, 0);
-    actions["Waving"].setLoop(THREE.LoopOnce,0);
-    actions["Typing2"].setLoop(THREE.LoopOnce,0);
-    actions["Standing"].setLoop(THREE.LoopOnce,0);
+    actions["Waving"].setLoop(THREE.LoopOnce, 0);
+    actions["Typing2"].setLoop(THREE.LoopOnce, 0);
+    actions["Standing"].setLoop(THREE.LoopOnce, 0);
     // console.log(actions["Hello"])
 
     // Start with a default animation, e.g., "Standing"
@@ -78,22 +78,19 @@ export function Avatar(props) {
     // You can also set a listener for when a one-shot animation finishes
     // For example, after "Hello" finishes, transition back to "Standing"
     const onAnimationFinish = (e) => {
-      console.log(e.action, props.animationState)
+      const finishedName = e.action.getClip().name;
+      const stillRelevant =
+        currentAction.current === actions[finishedName];
 
-      if(props.animationState === "Standing"){
+      if (!stillRelevant) return;
+
+      if (finishedName === "Standing") {
         transitionToAnimation("Waving", 0.5);
+      } else if (finishedName === "Waving") {
+        transitionToAnimation("Standing", 0.5);
       }
-      // if (props.animationState === "Hello") {
-      //   transitionToAnimation("TypingX", 0.5);
-      //   rotateRef.current = true;
-      //   // group2ref.current.position.z=0;
-      //   // meshRef.current.position.y = 0;
-      //   // gsap.to(mesh.position, { z: -10, duration: 2, ease: "power1.inOut" }); 
-
-      //   // props.setPositionZ(0); // Transition back to standing
-      // }
-      // Add more conditions for other one-shot animations
     };
+
     mixer.addEventListener('finished', onAnimationFinish);
 
     // Clean up event listener
@@ -127,9 +124,9 @@ export function Avatar(props) {
     }
   }, [props.animationState]);
 
-  useFrame((state)=>{
-    if(rotateRef.current && group2ref.current.rotation.z <= 2){
-       group2ref.current.rotation.z += 0.01;
+  useFrame((state) => {
+    if (rotateRef.current && group2ref.current.rotation.z <= 2) {
+      group2ref.current.rotation.z += 0.01;
     }
     // groupRef.current.getObjectByName("Head").lookAt(state.camera.position)
     // console.log(group2ref.current.rotation.z);
@@ -147,36 +144,36 @@ export function Avatar(props) {
   //   //   }
   //     // console.log("====inside======")
   //     // Move backwards
-      
+
   //   }
   // })
 
   // console.log(nodes)
 
-  Object.values(materials).forEach((material) =>{
+  Object.values(materials).forEach((material) => {
     // material.wireframe = true
-  
-  // material.vertexColors = false;
-  // material.visible = false;
-  // material?.specularColor?.set("#ff0000")
-material?.emmisive?.set('#ff00ff');
-// material.blendColor.set("#0000ff")
-  // material.color.r = 0;
-  // material.color.g = 0;
-  // material.color.b = 1;
 
-  // material.blendColor.r= 0;
-  // material.blendColor.g=0;
-  // material.blendColor.b=1;
+    // material.vertexColors = false;
+    // material.visible = false;
+    // material?.specularColor?.set("#ff0000")
+    material?.emmisive?.set('#ff00ff');
+    // material.blendColor.set("#0000ff")
+    // material.color.r = 0;
+    // material.color.g = 0;
+    // material.color.b = 1;
 
-  // material?.emmisive?.r=0;
-  // material?.emmisive?.g=0;
-  // material?.emmisive?.b=1;
-  // material.attenuationColor.g=0;
-  // material.attenuationColor.b=1;
+    // material.blendColor.r= 0;
+    // material.blendColor.g=0;
+    // material.blendColor.b=1;
+
+    // material?.emmisive?.r=0;
+    // material?.emmisive?.g=0;
+    // material?.emmisive?.b=1;
+    // material.attenuationColor.g=0;
+    // material.attenuationColor.b=1;
   })
 
-    // const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+  // const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
   // console.log(materials)
   console.log(props.animationState)
   return (

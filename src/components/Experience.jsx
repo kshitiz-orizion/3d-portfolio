@@ -22,10 +22,10 @@ function RotatingShell() {
   const ref = useRef();
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
-    if (ref.current) {
-      ref.current.rotation.y = -t * 0.05;
-      ref.current.rotation.x = t * 0.02;
-    }
+    // if (ref.current) {
+    //   ref.current.rotation.y = -t * 0.05;
+    //   ref.current.rotation.x = t * 0.02;
+    // }
   });
   return (
     <mesh ref={ref} position-y={0.2}>
@@ -48,7 +48,7 @@ export const Experience = () => {
         minPolarAngle={Math.PI / 2.6}
         maxPolarAngle={Math.PI / 2.1}
         autoRotate
-        autoRotateSpeed={0.2}
+        autoRotateSpeed={0}
       />
 
       {/* Theme-matched lighting — no HDRI / sky dome, but bright enough
