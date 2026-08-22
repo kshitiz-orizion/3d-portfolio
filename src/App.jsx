@@ -281,11 +281,12 @@ export default function Portfolio() {
         }
         .hero-name {
           font-family: 'Space Grotesk', sans-serif;
-          font-weight: 700;
-          font-size: clamp(2.6rem, 6vw, 5.4rem);
-          line-height: 0.98;
-          margin: 0 0 22px 0;
-          letter-spacing: -0.01em;
+  font-weight: 700;
+  font-size: clamp(2.6rem, 6vw, 5.4rem);
+  line-height: 0.98;
+  margin: 0 0 22px 0;
+  letter-spacing: -0.01em;
+  color: var(--line);
         }
         .hero-tagline {
           font-size: 1.05rem;
@@ -469,8 +470,10 @@ export default function Portfolio() {
           line-height: 1.05;
           max-width: 780px;
           margin: 0 0 44px 0;
+            color: var(--line);
+  -webkit-text-fill-color: var(--line);
         }
-        .contact-headline a { color: var(--ember); text-decoration: none; border-bottom: 1px solid currentColor; }
+        .contact-headline a { color: var(--ember); text-decoration: none; border-bottom: 1px solid currentColor; -webkit-text-fill-color: var(--ember); }
         .contact-headline a:hover, .contact-headline a:focus-visible { color: var(--line); }
 
         .title-block {
