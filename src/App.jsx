@@ -1,9 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
-import { FaBook, FaHospital, FaMouse, FaMusic, FaShip } from "react-icons/fa";
 import { FaHouse, FaNoteSticky } from "react-icons/fa6";
 import { FcSurvey } from "react-icons/fc";
+import {
+  FaBook,
+  FaHospital,
+  FaMouse,
+  FaMusic,
+  FaShip,
+  FaEnvelope,
+  FaLinkedin,
+  FaGithub,
+  FaMapMarkerAlt,
+} from "react-icons/fa";
 
 /* ============================================================
    BLUEPRINT PORTFOLIO — placeholder content, swap freely:
@@ -474,6 +484,12 @@ export default function Portfolio() {
           border-right: 1px solid var(--grid-line-strong);
           font-family: 'IBM Plex Mono', monospace;
         }
+          .contact-icon{
+          display: flex;
+    justify-content: center;
+    align-items: center;
+    color:var(--ember);
+          }
         .title-block .cell:last-child { border-right: none; }
         .title-block .cell .k { display: block; font-size: 10px; color: var(--slate); letter-spacing: 0.1em; margin-bottom: 6px; text-transform: uppercase; }
         .title-block .cell .v { font-size: 13px; color: var(--line); }
@@ -611,21 +627,40 @@ export default function Portfolio() {
             <a href="mailto:kshitiz.orizion@gmail.com">Let's talk &rarr;</a>
           </h2>
           <div className="title-block">
-            <div className="cell">
-              <span className="k">Email</span>
-              <span className="v"><a href="mailto:kshitiz.orizion@gmail.com">kshitiz.orizion@gmail.com</a></span>
-            </div>
-            <div className="cell">
-              <span className="k">Linkedin</span>
-              <span className="v"><a href="https://www.linkedin.com/in/kshitiz-orizion">https://www.linkedin.com/in/kshitiz-orizion</a></span>
-            </div>
-            <div className="cell">
-              <span className="k">GitHub</span>
-              <span className="v"><a href="https://github.com/kshitiz-orizion">https://github.com/kshitiz-orizion</a></span>
-            </div>
-            <div className="cell">
-              <span className="k">Location</span>
-              <span className="v">Bangalore, Karnataka, IN</span>
+            <a
+              className="contact-icon"
+              href="mailto:kshitiz.orizion@gmail.com"
+              aria-label="Email Kshitiz"
+            >
+              <FaEnvelope />
+              <span>Email</span>
+            </a>
+
+            <a
+              className="contact-icon"
+              href="https://www.linkedin.com/in/kshitiz-orizion"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="LinkedIn"
+            >
+              <FaLinkedin />
+              <span>LinkedIn</span>
+            </a>
+
+            <a
+              className="contact-icon"
+              href="https://github.com/kshitiz-orizion"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub"
+            >
+              <FaGithub />
+              <span>GitHub</span>
+            </a>
+
+            <div className="contact-icon location">
+              <FaMapMarkerAlt />
+              <span>Bangalore, IN</span>
             </div>
           </div>
           <div className="footer-note">DRAWN 2026 &nbsp;/&nbsp; SCALE 1:1 &nbsp;/&nbsp; ALL RIGHTS RESERVED</div>
