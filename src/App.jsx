@@ -280,7 +280,7 @@ export default function Portfolio() {
         .hero-tagline {
           font-size: 1.05rem;
           color: var(--slate);
-          max-width: 440px;
+          max-width: min(440px, 100%);
           line-height: 1.6;
           margin: 0 0 34px 0;
         }
