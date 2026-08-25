@@ -9,6 +9,18 @@ import { useAnimations, useFBX, useGLTF } from '@react-three/drei'
 import { SkeletonUtils } from 'three-stdlib'
 import * as THREE from 'three'; // Import THREE for blending modes
 
+// Per-transition crossfade duration. Poses that are close to each other
+// (e.g. Falling -> StandingUp, StandingUp -> Waving) can blend fast.
+// Poses that are far apart (Standing -> horizontal Flying) need more
+// time or the skeleton visibly "collapses" mid-blend.
+const TRANSITION_DURATIONS = {
+  StandingUp: 0.5,
+  Waving: 0.4,
+  Flying: 0.9,   // standing -> prone/horizontal needs a longer blend
+  Falling: 0.6,  // flying -> falling, also a big pose change
+};
+const DEFAULT_TRANSITION_DURATION = 0.5;
+
 export function Avatar(props) {
   const groupRef = useRef();
   const { scene } = useGLTF('models/686e86ca3c5db6e0e80c6464.glb')
@@ -25,6 +37,8 @@ export function Avatar(props) {
   const { animations: wavingAnimation } = useFBX('/animations/Waving.fbx');
   const { animations: typing2Animation } = useFBX('/animations/Typing2.fbx');
   const { animations: typingXAnimation } = useFBX('/animations/TypingX.fbx');
+  const { animations: standingUpAnimation } = useFBX('/animations/Standing Up.fbx');
+  const { animations: flyingAnimation } = useFBX('/animations/Flying.fbx');
 
   typingAnimation[0].name = "Typing";
   fallingAnimation[0].name = "Falling";
@@ -34,6 +48,18 @@ export function Avatar(props) {
   wavingAnimation[0].name = "Waving";
   typing2Animation[0].name = "Typing2";
   typingXAnimation[0].name = "TypingX";
+  standingUpAnimation[0].name = "StandingUp";
+  flyingAnimation[0].name = "Flying";
+
+  // --- Strip baked root-motion from the Flying clip ---
+  // Strip BOTH position and scale tracks on the root — a partial name
+  // match on '.position' alone can leave a stray scale track behind,
+  // which is what produces a sudden "shrink" pop when the clip starts.
+  flyingAnimation[0].tracks = flyingAnimation[0].tracks.filter((track) => {
+    const n = track.name.toLowerCase();
+    return !n.includes('.position') && !n.includes('.scale');
+  });
+
   // Combine all animations into a single array for useAnimations
   const allAnimations = [
     typingAnimation[0],
@@ -44,10 +70,11 @@ export function Avatar(props) {
     wavingAnimation[0],
     typing2Animation[0],
     typingXAnimation[0],
+    standingUpAnimation[0],
+    flyingAnimation[0]
   ];
 
   const { actions, mixer } = useAnimations(allAnimations, groupRef);
-  // const meshRef = useRef();
 
   const rotateRef = useRef();
   // Keep track of the currently active animation
@@ -57,7 +84,26 @@ export function Avatar(props) {
   const FALL_START_Y = 2;   // height the avatar starts falling from
   const FALL_END_Y = 0;     // ground/rest position
   const isFallingRef = useRef(false);
+  const fallStartYRef = useRef(FALL_START_Y);
 
+  // --- Flying Y-axis movement config ---
+  const FLY_LOW_Y = 0;      // low point of the flying bob
+  const FLY_HIGH_Y = 4;     // high point of the flying bob
+  const FLY_TILT_X = -Math.PI / 2.5; // how far forward the character tilts while flying
+  const isFlyingRef = useRef(false);
+
+  const FLY_TIMESCALE_START = 3;
+  const FLY_TIMESCALE_END = 5;
+  const FLY_TIMESCALE_RAMP_DURATION = 0.25; // seconds to reach full speed
+  const flyingSpeedRampElapsed = useRef(0);
+  // Delay the manual tilt slightly so it doesn't stack with the clip's
+  // own baked forward lean while the crossfade is still resolving.
+  const flyingBlendElapsed = useRef(0);
+  const FLY_TILT_DELAY = 0; // seconds into the Flying clip before we start tilting
+
+  const PIVOT_TO_FEET_HEIGHT = 0.9;
+
+  const FLY_TILT_START_PROGRESS = 0;
   useEffect(() => {
     // Initialize all actions to be ready but not actively playing
     Object.values(actions).forEach(action => {
@@ -72,9 +118,10 @@ export function Avatar(props) {
     actions["Typing2"].setLoop(THREE.LoopOnce, 0);
     actions["Standing"].setLoop(THREE.LoopOnce, 0);
     actions["Falling"].setLoop(THREE.LoopOnce, 0);
-    // console.log(actions["Hello"])
+    actions["StandingUp"].setLoop(THREE.LoopOnce, 0);
+    actions["Flying"].setLoop(THREE.LoopOnce, 0);
 
-    // Start with a default animation, e.g., "Standing"
+    // Start with a default animation, e.g., "Falling"
     const initialAction = actions["Falling"];
     if (initialAction) {
       initialAction.timeScale = 2;
@@ -82,13 +129,14 @@ export function Avatar(props) {
       if (groupRef.current) {
         groupRef.current.position.y = FALL_START_Y;
       }
+      fallStartYRef.current = FALL_START_Y;
       isFallingRef.current = true;
       initialAction.reset().fadeIn(0.5).setEffectiveWeight(1).play();
       currentAction.current = initialAction;
     }
 
-    // You can also set a listener for when a one-shot animation finishes
-    // For example, after "Hello" finishes, transition back to "Standing"
+    // Chain the animation sequence: Falling -> StandingUp -> Waving ->
+    // Flying -> Falling (loop).
     const onAnimationFinish = (e) => {
       const finishedName = e.action.getClip().name;
       const stillRelevant =
@@ -97,15 +145,16 @@ export function Avatar(props) {
       if (!stillRelevant) return;
       if (finishedName === "Falling") {
         isFallingRef.current = false;
-        if (groupRef.current) {
-          groupRef.current.position.y = FALL_END_Y;
-        }
-        transitionToAnimation("Standing", 0.5);
+        transitionToAnimation("StandingUp");
       }
-      if (finishedName === "Standing") {
-        transitionToAnimation("Waving", 0.5);
+      if (finishedName === "StandingUp") {
+        transitionToAnimation("Waving");
       } else if (finishedName === "Waving") {
-        transitionToAnimation("Falling", 0.5);
+        transitionToAnimation("Flying");
+      }
+      else if (finishedName === "Flying") {
+        isFlyingRef.current = false;
+        transitionToAnimation("Falling");
       }
     };
 
@@ -119,39 +168,68 @@ export function Avatar(props) {
   }, [actions, mixer]); // Depend on actions and mixer so this runs once after they are available
 
   // Function to smoothly transition between animations
-  const transitionToAnimation = (name, duration = 0.5) => {
-    console.log("====here=====")
+  const transitionToAnimation = (name, durationOverride) => {
     const newAction = actions[name];
     if (newAction && newAction !== currentAction.current) {
-      // Fade out the current action and fade in the new one
-      currentAction.current.crossFadeTo(newAction, duration, true); // true for warpBoolean
-      currentAction.current.fadeOut(0.5); // Ensure it explicitly fades out
+      const duration =
+        durationOverride ?? TRANSITION_DURATIONS[name] ?? DEFAULT_TRANSITION_DURATION;
+
+      const previousAction = currentAction.current;
+
+      if (name === "StandingUp" || name === "Falling") {
+        newAction.timeScale = 2;
+      }
+      else if (name === "Flying") {
+        newAction.timeScale = FLY_TIMESCALE_START;
+      }
+      else {
+        newAction.timeScale = 1;
+      }
+
+      // 1. Prepare and start the incoming action cleanly
+      newAction
+        .reset()
+        .setEffectiveTimeScale(newAction.timeScale)
+        .setEffectiveWeight(1)
+        .fadeIn(duration)
+        .play();
+
+      // 2. Crossfade from the old action to the new one
+      if (previousAction) {
+        previousAction.crossFadeTo(newAction, duration, false);
+      }
+
+      currentAction.current = newAction;
+      newAnimation.current = name;
 
       // Handle Falling-specific position setup/teardown
       if (name === "Falling") {
         isFallingRef.current = true;
         if (groupRef.current) {
-          groupRef.current.position.y = FALL_START_Y;
+          fallStartYRef.current = groupRef.current.position.y;
         }
-      } else if (currentAction.current === actions["Falling"]) {
+      } else if (previousAction === actions["Falling"]) {
         isFallingRef.current = false;
         if (groupRef.current) {
           groupRef.current.position.y = FALL_END_Y;
         }
       }
 
-      newAction.reset().fadeIn(0.5).setEffectiveWeight(1).play();
-      currentAction.current = newAction;
-      newAnimation.current = name;
-      // props.setAnimationChanged(!props.setAnimationChanged);
+      // Handle Flying-specific vertical movement setup/teardown
+      if (name === "Flying") {
+        isFlyingRef.current = true;
+        flyingBlendElapsed.current = 0;
+        flyingSpeedRampElapsed.current = 0;
+      } else if (previousAction === actions["Flying"]) {
+        isFlyingRef.current = false;
+      }
     }
   };
 
   // Example of how you might trigger animations from props or state changes
-  // For instance, if you have a prop `animationState`
   useEffect(() => {
     if (props.animationState) {
-      transitionToAnimation(props.animationState, 0.5);
+      transitionToAnimation(props.animationState);
     }
   }, [props.animationState]);
 
@@ -169,58 +247,69 @@ export function Avatar(props) {
       groupRef.current
     ) {
       const clipDuration = fallingAction.getClip().duration;
-      // action.time respects timeScale, so this tracks actual playback progress
       const progress = THREE.MathUtils.clamp(fallingAction.time / clipDuration, 0, 1);
-      groupRef.current.position.y = THREE.MathUtils.lerp(FALL_START_Y, FALL_END_Y, progress);
+      groupRef.current.position.y = THREE.MathUtils.lerp(fallStartYRef.current, FALL_END_Y, progress);
     }
-    // groupRef.current.getObjectByName("Head").lookAt(state.camera.position)
-    // console.log(group2ref.current.rotation.z);
+
+    // Drive the Y-axis bob while the Flying animation is active.
+    const flyingAction = actions["Flying"];
+    let flyingHeightProgress = null; // Default to null when not flying
+
+    if (
+      isFlyingRef.current &&
+      flyingAction &&
+      currentAction.current === flyingAction &&
+      groupRef.current
+    ) {
+      const clipDuration = flyingAction.getClip().duration;
+      const progress = THREE.MathUtils.clamp(fallingAction?.time ?? flyingAction.time / clipDuration, 0, 1); // fix reference just in case, use flyingAction.time
+      const actualProgress = THREE.MathUtils.clamp(flyingAction.time / clipDuration, 0, 1);
+
+      // Monotonic ease-out rise: 0 -> 1, never comes back down mid-clip.
+      const eased = Math.sin(actualProgress * Math.PI / 2);
+      groupRef.current.position.y = THREE.MathUtils.lerp(FLY_LOW_Y, FLY_HIGH_Y, eased);
+
+      // Capture the progress so tiltProgress can use it!
+      flyingHeightProgress = actualProgress;
+      flyingSpeedRampElapsed.current += delta;
+      const rampT = THREE.MathUtils.clamp(
+        flyingSpeedRampElapsed.current / FLY_TIMESCALE_RAMP_DURATION,
+        0,
+        1
+      );
+      const rampEased = rampT * rampT; // easeInQuad — feels like accelerating flight
+      flyingAction.timeScale = THREE.MathUtils.lerp(
+        FLY_TIMESCALE_START,
+        FLY_TIMESCALE_END,
+        rampEased
+      );
+    }
+
+    if (groupRef.current) {
+      const tiltProgress = flyingHeightProgress === null
+        ? 0
+        : THREE.MathUtils.clamp(
+          (flyingHeightProgress - FLY_TILT_START_PROGRESS) / (1 - FLY_TILT_START_PROGRESS),
+          0,
+          1
+        );
+
+      const targetX = isFlyingRef.current ? FLY_TILT_X : 0;
+      groupRef.current.rotation.x = THREE.MathUtils.lerp(
+        groupRef.current.rotation.x,
+        targetX,
+        delta * 3
+      );
+
+      const tiltCompensation = PIVOT_TO_FEET_HEIGHT * (1 - Math.cos(groupRef.current.rotation.x));
+      groupRef.current.position.y += tiltCompensation;
+    }
   })
-
-
-  // useFrame(() => {
-  //   // console.log(newAnimation)
-  //   // if (meshRef.current && newAnimation.current === "TypingX") {
-  //   //   if(meshRef.current.position.y <0){
-  //   //      meshRef.current.position.y += 0.01
-  //   //   }
-  //   //   else{
-  //   //     newAnimation.current = false;
-  //   //   }
-  //     // console.log("====inside======")
-  //     // Move backwards
-
-  //   }
-  // })
-
-  // console.log(nodes)
 
   Object.values(materials).forEach((material) => {
-    // material.wireframe = true
-
-    // material.vertexColors = false;
-    // material.visible = false;
-    // material?.specularColor?.set("#ff0000")
     material?.emmisive?.set('#ff00ff');
-    // material.blendColor.set("#0000ff")
-    // material.color.r = 0;
-    // material.color.g = 0;
-    // material.color.b = 1;
-
-    // material.blendColor.r= 0;
-    // material.blendColor.g=0;
-    // material.blendColor.b=1;
-
-    // material?.emmisive?.r=0;
-    // material?.emmisive?.g=0;
-    // material?.emmisive?.b=1;
-    // material.attenuationColor.g=0;
-    // material.attenuationColor.b=1;
   })
 
-  // const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-  // console.log(materials)
-  console.log(props.animationState)
   return (
     <group {...props} ref={groupRef} dispose={null}>
       <group rotation-x={-Math.PI / 2} ref={group2ref}>
