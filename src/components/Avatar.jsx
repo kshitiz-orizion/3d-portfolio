@@ -14,9 +14,10 @@ import * as THREE from 'three'; // Import THREE for blending modes
 // Poses that are far apart (Standing -> horizontal Flying) need more
 // time or the skeleton visibly "collapses" mid-blend.
 const TRANSITION_DURATIONS = {
+  FlyingPose:0.5,
   StandingUp: 0.5,
   Waving: 0.4,
-  Flying: 0.9,   // standing -> prone/horizontal needs a longer blend
+  Flying: 0.5,   // standing -> prone/horizontal needs a longer blend
   Falling: 0.6,  // flying -> falling, also a big pose change
 };
 const DEFAULT_TRANSITION_DURATION = 0.5;
@@ -29,49 +30,55 @@ export function Avatar(props) {
   const newAnimation = useRef();
   const group2ref = useRef();
 
-  const { animations: typingAnimation } = useFBX('/animations/Typing.fbx');
   const { animations: fallingAnimation } = useFBX('/animations/Falling.fbx');
-  const { animations: standingAnimation } = useFBX('/animations/Standing.fbx');
-  const { animations: helloAnimation } = useFBX('/animations/Asking Question.fbx');
-  const { animations: sitToType } = useFBX('/animations/Sit To Type.fbx');
   const { animations: wavingAnimation } = useFBX('/animations/Waving.fbx');
-  const { animations: typing2Animation } = useFBX('/animations/Typing2.fbx');
-  const { animations: typingXAnimation } = useFBX('/animations/TypingX.fbx');
-  const { animations: standingUpAnimation } = useFBX('/animations/Standing Up.fbx');
-  const { animations: flyingAnimation } = useFBX('/animations/Flying.fbx');
+  const { animations: standingUpAnimation } = useFBX('/animations/Standing Up.fbx');  
+  const { animations: flyingAnimation } = useFBX('/animations/FlyingVertical2.fbx');
+  const {animations: flyingPose} = useFBX('/animations/FlyingPose.fbx');
 
-  typingAnimation[0].name = "Typing";
   fallingAnimation[0].name = "Falling";
-  standingAnimation[0].name = "Standing";
-  helloAnimation[0].name = "Hello";
-  sitToType[0].name = "Sitting";
+
   wavingAnimation[0].name = "Waving";
-  typing2Animation[0].name = "Typing2";
-  typingXAnimation[0].name = "TypingX";
+
   standingUpAnimation[0].name = "StandingUp";
   flyingAnimation[0].name = "Flying";
+  flyingPose[0].name="FlyingPose"
 
-  // --- Strip baked root-motion from the Flying clip ---
-  // Strip BOTH position and scale tracks on the root — a partial name
-  // match on '.position' alone can leave a stray scale track behind,
-  // which is what produces a sudden "shrink" pop when the clip starts.
-  flyingAnimation[0].tracks = flyingAnimation[0].tracks.filter((track) => {
-    const n = track.name.toLowerCase();
-    return !n.includes('.position') && !n.includes('.scale');
-  });
+    // --- Strip baked root-motion from the Flying clip ---
+  // Keep the Hips vertical (Y) offset — that's what holds the pose above
+  // the ground — but zero out horizontal (X/Z) drift and drop scale tracks.
+  let flyingBaseY = 0;
+  // flyingAnimation[0].tracks = flyingAnimation[0].tracks
+  //   .map((track) => {
+  //     const n = track.name.toLowerCase();
+  //     if (n.includes('.scale')) return null; // drop scale tracks entirely
+
+  //     if (n.includes('.position')) {
+  //       const values = track.values.slice(); // [x0,y0,z0, x1,y1,z1, ...]
+  //       if (n.includes('hips')) {
+  //         flyingBaseY = values[1]; // capture frame-0 height before zeroing
+  //       }
+  //       for (let i = 0; i < values.length; i += 3) {
+  //         values[i] = 0;     // x
+  //         values[i + 2] = 0; // z
+  //         // leave values[i+1] (y) untouched so the float height survives
+  //       }
+  //       track.values = values;
+  //       return track;
+  //     }
+
+  //     return track; // rotation/quaternion tracks etc. pass through untouched
+  //   })
+  //   .filter(Boolean);
 
   // Combine all animations into a single array for useAnimations
   const allAnimations = [
-    typingAnimation[0],
     fallingAnimation[0],
-    standingAnimation[0],
-    helloAnimation[0],
-    sitToType[0],
+
     wavingAnimation[0],
-    typing2Animation[0],
-    typingXAnimation[0],
     standingUpAnimation[0],
-    flyingAnimation[0]
+    flyingAnimation[0],
+    flyingPose[0]
   ];
 
   const { actions, mixer } = useAnimations(allAnimations, groupRef);
@@ -86,24 +93,12 @@ export function Avatar(props) {
   const isFallingRef = useRef(false);
   const fallStartYRef = useRef(FALL_START_Y);
 
-  // --- Flying Y-axis movement config ---
-  const FLY_LOW_Y = 0;      // low point of the flying bob
-  const FLY_HIGH_Y = 4;     // high point of the flying bob
-  const FLY_TILT_X = -Math.PI / 2.5; // how far forward the character tilts while flying
+   const FLY_START_Y = 0;   // height the avatar starts falling from
+  const FLY_END_Y = 2;     // ground/rest position
   const isFlyingRef = useRef(false);
+  const flyStartYRef = useRef(FALL_START_Y);
 
-  const FLY_TIMESCALE_START = 3;
-  const FLY_TIMESCALE_END = 5;
-  const FLY_TIMESCALE_RAMP_DURATION = 0.25; // seconds to reach full speed
-  const flyingSpeedRampElapsed = useRef(0);
-  // Delay the manual tilt slightly so it doesn't stack with the clip's
-  // own baked forward lean while the crossfade is still resolving.
-  const flyingBlendElapsed = useRef(0);
-  const FLY_TILT_DELAY = 0; // seconds into the Flying clip before we start tilting
 
-  const PIVOT_TO_FEET_HEIGHT = 0.9;
-
-  const FLY_TILT_START_PROGRESS = 0;
   useEffect(() => {
     // Initialize all actions to be ready but not actively playing
     Object.values(actions).forEach(action => {
@@ -120,6 +115,7 @@ export function Avatar(props) {
     actions["Falling"].setLoop(THREE.LoopOnce, 0);
     actions["StandingUp"].setLoop(THREE.LoopOnce, 0);
     actions["Flying"].setLoop(THREE.LoopOnce, 0);
+    actions["FlyingPose"].setLoop(THREE.LoopOnce, 0);
 
     // Start with a default animation, e.g., "Falling"
     const initialAction = actions["Falling"];
@@ -139,6 +135,7 @@ export function Avatar(props) {
     // Flying -> Falling (loop).
     const onAnimationFinish = (e) => {
       const finishedName = e.action.getClip().name;
+      console.log(finishedName,"====here====")
       const stillRelevant =
         currentAction.current === actions[finishedName];
 
@@ -149,7 +146,12 @@ export function Avatar(props) {
       }
       if (finishedName === "StandingUp") {
         transitionToAnimation("Waving");
-      } else if (finishedName === "Waving") {
+      } 
+      else if (finishedName === "Waving") {
+        transitionToAnimation("FlyingPose");
+      }
+      else if(finishedName === "FlyingPose"){
+         isFlyingRef.current = true;
         transitionToAnimation("Flying");
       }
       else if (finishedName === "Flying") {
@@ -179,8 +181,8 @@ export function Avatar(props) {
       if (name === "StandingUp" || name === "Falling") {
         newAction.timeScale = 2;
       }
-      else if (name === "Flying") {
-        newAction.timeScale = FLY_TIMESCALE_START;
+      else if(name === "FlyingPose"){
+        newAction.timeScale = 5;
       }
       else {
         newAction.timeScale = 1;
@@ -214,15 +216,13 @@ export function Avatar(props) {
           groupRef.current.position.y = FALL_END_Y;
         }
       }
-
-      // Handle Flying-specific vertical movement setup/teardown
-      if (name === "Flying") {
-        isFlyingRef.current = true;
-        flyingBlendElapsed.current = 0;
-        flyingSpeedRampElapsed.current = 0;
-      } else if (previousAction === actions["Flying"]) {
-        isFlyingRef.current = false;
+      // Snap to the height baked into the Flying clip so the horizontal
+      // pose doesn't clip through the floor.
+      if (name === "Flying" && groupRef.current) {
+        console.log("====here====",FLY_START_Y)
+        groupRef.current.position.y = FLY_START_Y;
       }
+
     }
   };
 
@@ -234,12 +234,13 @@ export function Avatar(props) {
   }, [props.animationState]);
 
   useFrame((state, delta) => {
-    if (rotateRef.current && group2ref.current.rotation.z <= 2) {
-      group2ref.current.rotation.z += 0.01;
-    }
+    // if (rotateRef.current && group2ref.current.rotation.z <= 2) {
+    //   group2ref.current.rotation.z += 0.01;
+    // }
 
     // Drive the Y-axis drop while the Falling animation is active
     const fallingAction = actions["Falling"];
+    const flyingAction = actions["Flying"];
     if (
       isFallingRef.current &&
       fallingAction &&
@@ -251,10 +252,6 @@ export function Avatar(props) {
       groupRef.current.position.y = THREE.MathUtils.lerp(fallStartYRef.current, FALL_END_Y, progress);
     }
 
-    // Drive the Y-axis bob while the Flying animation is active.
-    const flyingAction = actions["Flying"];
-    let flyingHeightProgress = null; // Default to null when not flying
-
     if (
       isFlyingRef.current &&
       flyingAction &&
@@ -262,48 +259,12 @@ export function Avatar(props) {
       groupRef.current
     ) {
       const clipDuration = flyingAction.getClip().duration;
-      const progress = THREE.MathUtils.clamp(fallingAction?.time ?? flyingAction.time / clipDuration, 0, 1); // fix reference just in case, use flyingAction.time
-      const actualProgress = THREE.MathUtils.clamp(flyingAction.time / clipDuration, 0, 1);
-
-      // Monotonic ease-out rise: 0 -> 1, never comes back down mid-clip.
-      const eased = Math.sin(actualProgress * Math.PI / 2);
-      groupRef.current.position.y = THREE.MathUtils.lerp(FLY_LOW_Y, FLY_HIGH_Y, eased);
-
-      // Capture the progress so tiltProgress can use it!
-      flyingHeightProgress = actualProgress;
-      flyingSpeedRampElapsed.current += delta;
-      const rampT = THREE.MathUtils.clamp(
-        flyingSpeedRampElapsed.current / FLY_TIMESCALE_RAMP_DURATION,
-        0,
-        1
-      );
-      const rampEased = rampT * rampT; // easeInQuad — feels like accelerating flight
-      flyingAction.timeScale = THREE.MathUtils.lerp(
-        FLY_TIMESCALE_START,
-        FLY_TIMESCALE_END,
-        rampEased
-      );
+      const progress = THREE.MathUtils.clamp(flyingAction.time / clipDuration, 0, 1);
+      groupRef.current.position.y = THREE.MathUtils.lerp(FLY_START_Y, FLY_END_Y, progress);
     }
 
-    if (groupRef.current) {
-      const tiltProgress = flyingHeightProgress === null
-        ? 0
-        : THREE.MathUtils.clamp(
-          (flyingHeightProgress - FLY_TILT_START_PROGRESS) / (1 - FLY_TILT_START_PROGRESS),
-          0,
-          1
-        );
+    // Drive the Y-axis bob while the Flying animation is active.
 
-      const targetX = isFlyingRef.current ? FLY_TILT_X : 0;
-      groupRef.current.rotation.x = THREE.MathUtils.lerp(
-        groupRef.current.rotation.x,
-        targetX,
-        delta * 3
-      );
-
-      const tiltCompensation = PIVOT_TO_FEET_HEIGHT * (1 - Math.cos(groupRef.current.rotation.x));
-      groupRef.current.position.y += tiltCompensation;
-    }
   })
 
   Object.values(materials).forEach((material) => {
