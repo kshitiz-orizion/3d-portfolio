@@ -108,10 +108,7 @@ export function Avatar(props) {
       action.clampWhenFinished = true; // For one-shot animations like 'Hello'
     });
 
-    actions["Hello"].setLoop(THREE.LoopOnce, 0);
     actions["Waving"].setLoop(THREE.LoopOnce, 0);
-    actions["Typing2"].setLoop(THREE.LoopOnce, 0);
-    actions["Standing"].setLoop(THREE.LoopOnce, 0);
     actions["Falling"].setLoop(THREE.LoopOnce, 0);
     actions["StandingUp"].setLoop(THREE.LoopOnce, 0);
     actions["Flying"].setLoop(THREE.LoopOnce, 0);
