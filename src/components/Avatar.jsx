@@ -132,7 +132,6 @@ export function Avatar(props) {
     // Flying -> Falling (loop).
     const onAnimationFinish = (e) => {
       const finishedName = e.action.getClip().name;
-      console.log(finishedName,"====here====")
       const stillRelevant =
         currentAction.current === actions[finishedName];
 
@@ -216,7 +215,6 @@ export function Avatar(props) {
       // Snap to the height baked into the Flying clip so the horizontal
       // pose doesn't clip through the floor.
       if (name === "Flying" && groupRef.current) {
-        console.log("====here====",FLY_START_Y)
         groupRef.current.position.y = FLY_START_Y;
       }
 
